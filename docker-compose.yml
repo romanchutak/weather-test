@@ -1,0 +1,54 @@
+version: '3.9'
+services:
+  server:
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      target: development
+    command: >
+      sh -c "npm run migrate && npm run start:dev"
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_HOST: weather_db
+    depends_on:
+      weather_db:
+        condition: service_healthy
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    ports:
+      - '${PORT}:${PORT}'
+
+  weather_db:
+    image: mysql:5.7
+    restart: always
+    command: 
+      - --character-set-server=utf8
+      - --collation-server=utf8_general_ci
+      - --sql_mode=NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
+      - --default-authentication-plugin=mysql_native_password
+      - --init-file=/data/init.sql
+    env_file:
+      - ./.env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DATABASE_PASS}
+      MYSQL_DATABASE: ${DATABASE_NAME}
+    ports:
+      - '${DATABASE_PORT}:${DATABASE_PORT}'
+    volumes:
+      - ./dbdata:/var/lib/mysql
+      - ./init.sql:/data/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "mysql -h localhost -u${DATABASE_USERNAME} -p${DATABASE_PASS}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  adminer_container:
+    image: adminer:latest
+    environment:
+      ADMINER_DEFAULT_SERVER: weather_db
+    ports:
+      - 8080:8080
